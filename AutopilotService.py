@@ -294,14 +294,14 @@ def process_message(message, client):
 
     splited = message.topic.split("/")
     origin = splited[0]
-    command = splited[2]
+    command = splited[3]
     sending_topic = "autopilotService/" + origin
 
     if command == "connect":
         if state == 'disconnected':
             print("Autopilot service connected by " + origin)
             if op_mode == 'simulation':
-                connection_string = "tcp:127.0.0.1:5763"
+                connection_string = "tcp:127.0.0.1:"+str(5763+drone_identifier*10)
             else:
                 connection_string = "/dev/ttyS0"
 
@@ -399,16 +399,23 @@ def on_external_message(client, userdata, message):
     global external_client
     process_message(message, external_client)
 
-def AutopilotService (connection_mode, operation_mode, external_broker, username, password):
+def AutopilotService (connection_mode, operation_mode, external_broker, username, password, droneId=0):
     global op_mode
     global external_client
     global internal_client
     global state
+    global drone_identifier
 
     state = 'disconnected'
+    drone_identifier = droneId
 
     print ('Connection mode: ', connection_mode)
     print ('Operation mode: ', operation_mode)
+    if sys.argv[-2] == "multi":
+        print("(SWARM MODE) drone number: ", drone_identifier)
+        drone_id_string = " "+str(drone_identifier)
+    else:
+        drone_id_string = ""
     op_mode = operation_mode
 
     # The internal broker is always (global or local mode) at localhost:1884
@@ -430,7 +437,7 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
 
 
 
-    external_client = mqtt.Client("Autopilot_external", transport="websockets")
+    external_client = mqtt.Client("Autopilot_external"+drone_id_string, transport="websockets")
     if external_broker_address == 'classpip.upc.edu':
         external_client.username_pw_set(username, password)
 
@@ -438,13 +445,14 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     external_client.connect(external_broker_address, external_broker_port)
 
 
-    internal_client = mqtt.Client("Autopilot_internal")
+    internal_client = mqtt.Client("Autopilot_internal"+drone_id_string)
     internal_client.on_message = on_internal_message
     internal_client.connect(internal_broker_address, internal_broker_port)
 
     print("Waiting....")
-    external_client.subscribe("+/autopilotService/#", 2)
-    internal_client.subscribe("+/autopilotService/#")
+    topic_string = "+/autopilotService/"+str(drone_identifier)+"/#"
+    external_client.subscribe(topic_string, 2)
+    internal_client.subscribe(topic_string)
     if operation_mode == 'simulation':
         external_client.loop_forever()
     else:
@@ -466,4 +474,7 @@ if __name__ == '__main__':
     else:
         external_broker = None
 
-    AutopilotService(connection_mode,operation_mode, external_broker, username, password)
+    if sys.argv[-2] == "multi":
+        AutopilotService(connection_mode,operation_mode, external_broker, username, password, int(sys.argv[-1]))
+    else:
+        AutopilotService(connection_mode,operation_mode, external_broker, username, password)
