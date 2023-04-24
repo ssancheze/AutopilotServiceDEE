@@ -294,7 +294,7 @@ def process_message(message, client):
 
     splited = message.topic.split("/")
     origin = splited[0]
-    command = splited[3]
+    command = splited[-1]
     sending_topic = "autopilotService/" + origin
 
     if command == "connect":
@@ -413,7 +413,7 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     print ('Operation mode: ', operation_mode)
     if sys.argv[-2] == "multi":
         print("(SWARM MODE) drone number: ", drone_identifier)
-        drone_id_string = " "+str(drone_identifier)
+        drone_id_string = "/"+str(drone_identifier)
     else:
         drone_id_string = ""
     op_mode = operation_mode
@@ -437,7 +437,7 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
 
 
 
-    external_client = mqtt.Client("Autopilot_external"+drone_id_string, transport="websockets")
+    external_client = mqtt.Client("Autopilot_external "+drone_id_string, transport="websockets")
     if external_broker_address == 'classpip.upc.edu':
         external_client.username_pw_set(username, password)
 
@@ -445,12 +445,12 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     external_client.connect(external_broker_address, external_broker_port)
 
 
-    internal_client = mqtt.Client("Autopilot_internal"+drone_id_string)
+    internal_client = mqtt.Client("Autopilot_internal "+drone_id_string)
     internal_client.on_message = on_internal_message
     internal_client.connect(internal_broker_address, internal_broker_port)
 
     print("Waiting....")
-    topic_string = "+/autopilotService/"+str(drone_identifier)+"/#"
+    topic_string = "+/autopilotService"+drone_id_string+"/#"
     external_client.subscribe(topic_string, 2)
     internal_client.subscribe(topic_string)
     if operation_mode == 'simulation':
