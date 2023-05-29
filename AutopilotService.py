@@ -7,6 +7,20 @@ import dronekit
 from dronekit import connect, Command, VehicleMode
 from pymavlink import mavutil
 
+import ConnectionManagerClass
+from ConnectionManagerClass import ConnectionManager
+
+# Local mode: set the mode of the local connection:
+# 0 = onboard broker
+# 1 = single broker
+_LOCAL_MODE = 0
+
+# Max drones: the maximum number of drones used if flying in swarm mode
+_MAX_DRONES = 1
+
+# Telemetry com port: the number next to "COM" that appears when using telemetry for communications.
+_TELEMETRY_COM_PORT = 14
+
 
 def arm():
     """Arms vehicle and fly to aTargetAltitude"""
@@ -99,9 +113,10 @@ def send_telemetry_info():
     global external_client
     global sending_telemetry_info
     global sending_topic
+    global drone_id_string
 
     while sending_telemetry_info:
-        external_client.publish(sending_topic + "/telemetryInfo", json.dumps(get_telemetry_info()))
+        external_client.publish(sending_topic + drone_id_string + "/telemetryInfo", json.dumps(get_telemetry_info()))
         time.sleep(0.25)
 
 
@@ -197,9 +212,9 @@ def executeFlightPlan(waypoints_json):
         dist = distanceInMeters (destinationPoint,currentLocation)
 
         while dist > distanceThreshold:
-            time.sleep(0.25)
             currentLocation = vehicle.location.global_frame
             dist = distanceInMeters(destinationPoint, currentLocation)
+            time.sleep(0.25)
         print ('reached')
         waypointReached = {
             'lat':currentLocation.lat,
@@ -219,9 +234,9 @@ def executeFlightPlan(waypoints_json):
     dist = distanceInMeters(originPoint, currentLocation)
 
     while dist > distanceThreshold:
-        time.sleep(0.25)
         currentLocation = vehicle.location.global_frame
         dist = distanceInMeters(originPoint, currentLocation)
+        # time.sleep(0.25)
 
     state = 'landing'
     while vehicle.armed:
@@ -267,10 +282,11 @@ def executeFlightPlan2(waypoints_json):
     while True:
         nextwaypoint = vehicle.commands.next
         print ('next ', nextwaypoint)
+        time.sleep(0.5)
         if nextwaypoint == len(waypoints):  # Dummy waypoint - as soon as we reach waypoint 4 this is true and we exit.
             print("Last waypoint reached")
             break;
-        time.sleep(0.5)
+
 
     print('Return to launch')
     state = 'returningHome'
@@ -300,13 +316,17 @@ def process_message(message, client):
     if command == "connect":
         if state == 'disconnected':
             print("Autopilot service connected by " + origin)
+            _baud_rate = 115200
             if op_mode == 'simulation':
                 connection_string = "tcp:127.0.0.1:"+str(5763+drone_identifier*10)
             else:
-                connection_string = "/dev/ttyS0"
+                if connection_mode == 'direct':
+                    connection_string = f"com{_TELEMETRY_COM_PORT}"
+                    _baud_rate = 57600
+                else:
+                    connection_string = "/dev/ttyS0"
 
-
-            vehicle = connect(connection_string, wait_ready=False, baud=115200)
+            vehicle = connect(connection_string, wait_ready=False, baud=_baud_rate)
 
             vehicle.wait_ready(True, timeout=5000)
 
@@ -399,25 +419,28 @@ def on_external_message(client, userdata, message):
     global external_client
     process_message(message, external_client)
 
-def AutopilotService (connection_mode, operation_mode, external_broker, username, password, droneId=0):
+def AutopilotService (connection_mode, operation_mode, external_broker, username, password, droneId=""):
     global op_mode
     global external_client
     global internal_client
     global state
     global drone_identifier
+    global drone_id_string
 
     state = 'disconnected'
     drone_identifier = droneId
 
     print ('Connection mode: ', connection_mode)
     print ('Operation mode: ', operation_mode)
-    if sys.argv[-2] == "multi":
-        print("(SWARM MODE) drone number: ", drone_identifier)
+    drone_id_string = ""
+    drone_identifier = 0
+    if sys.argv[-2] == "multi" and droneId != "":
+        drone_identifier = int(droneId)
         drone_id_string = "/"+str(drone_identifier)
-    else:
-        drone_id_string = ""
+        print("(SWARM MODE) drone number: ", drone_identifier)
     op_mode = operation_mode
 
+    """
     # The internal broker is always (global or local mode) at localhost:1884
     internal_broker_address = "localhost"
     internal_broker_port = 1884
@@ -426,28 +449,36 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
         external_broker_address = external_broker
     else:
         external_broker_address = 'localhost'
+    """
 
+    _args = (connection_mode, _APPLICATION_NAME)
+    _kwargs = dict()
+    if connection_mode == 'local':
+        _kwargs['local_mode'] = _LOCAL_MODE
+    if droneId != "":
+        _kwargs['max_drones'] = _MAX_DRONES
+    _kwargs['external_broker_address'] = external_broker
+    _kwargs['broker_credentials'] = (username, password)
 
-    print ('External broker: ', external_broker_address)
+    myConnectionManager = ConnectionManager()
+    external_broker_settings, internal_broker_settings = myConnectionManager.setParameters(connection_mode,
+                                                                                           _APPLICATION_NAME, **_kwargs)
 
-
-
-    # the external broker must run always in port 8000
-    external_broker_port = 8000
-
-
+    print('External broker: ', external_broker_settings[0])
 
     external_client = mqtt.Client("Autopilot_external "+drone_id_string, transport="websockets")
-    if external_broker_address == 'classpip.upc.edu':
-        external_client.username_pw_set(username, password)
-
     external_client.on_message = on_external_message
-    external_client.connect(external_broker_address, external_broker_port)
 
+    if external_broker_settings[0] in ConnectionManagerClass.getProtectedBrokers():
+        external_client.username_pw_set(*external_broker_settings[2])
+        external_client.connect(*external_broker_settings[:-1])
+    else:
+        external_client.connect(*external_broker_settings)
 
     internal_client = mqtt.Client("Autopilot_internal "+drone_id_string)
     internal_client.on_message = on_internal_message
-    internal_client.connect(internal_broker_address, internal_broker_port)
+
+    internal_client.connect(*internal_broker_settings)
 
     print("Waiting....")
     topic_string = "+/autopilotService"+drone_id_string+"/#"
@@ -462,6 +493,12 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
 
 if __name__ == '__main__':
     import sys
+    _APPLICATION_NAME = __file__.split('\\')[-1][:-3]
+    """
+    SCRIPT PARAMETERS SYNTAX
+    global/local/direct simulation/production external_broker_address (username pwd) (multi drone_id)
+    """
+
     connection_mode = sys.argv[1] # global or local
     operation_mode = sys.argv[2] # simulation or production
     username = None
@@ -475,6 +512,6 @@ if __name__ == '__main__':
         external_broker = None
 
     if sys.argv[-2] == "multi":
-        AutopilotService(connection_mode,operation_mode, external_broker, username, password, int(sys.argv[-1]))
+        AutopilotService(connection_mode,operation_mode, external_broker, username, password, sys.argv[-1])
     else:
-        AutopilotService(connection_mode,operation_mode, external_broker, username, password)
+        AutopilotService(connection_mode,operation_mode, external_broker, username, password,)
