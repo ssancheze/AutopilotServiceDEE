@@ -43,8 +43,8 @@ def processScriptParameters():
     _broker_credentials = None
 
     if _external_broker_address[0] in _PROTECTED_BROKERS:
-        _broker_username = script_parameters[-_default_ending_arguments-2]
-        _broker_pwd = script_parameters[-_default_ending_arguments-1]
+        _broker_username = script_parameters[-_default_ending_arguments - 2]
+        _broker_pwd = script_parameters[-_default_ending_arguments - 1]
         if _broker_username == _external_broker_address[0] or _broker_pwd == _external_broker_address[0]:
             raise Exception("ERROR: missing broker credentials")
         else:
@@ -65,6 +65,10 @@ def processScriptParameters():
         _return_kwargs['broker_credentials'] = _broker_credentials
 
     return _return_args, _return_kwargs
+
+
+def getProtectedBrokers():
+    return _PROTECTED_BROKERS
 
 
 class ConnectionManager:
@@ -199,4 +203,5 @@ if __name__ == "__main__":
     print(f'processed parameters: {processed_parameters}')
     testCon = ConnectionManager()
     if not processed_parameters == Exception:
-        print(f'connection manager output: {testCon.setParameters(*processed_parameters[0], **processed_parameters[1])}')
+        print(
+            f'connection manager output: {testCon.setParameters(*processed_parameters[0], **processed_parameters[1])}')
