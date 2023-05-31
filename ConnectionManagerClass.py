@@ -170,8 +170,7 @@ class ConnectionManager:
                 # broker.hivemq.com type of address
                 _outer_address = self.outer_broker_address
                 if _outer_address in _PROTECTED_BROKERS:
-                    external_broker['username'] = self.broker_credentials[0]
-                    external_broker['password'] = self.broker_credentials[1]
+                    external_broker['credentials'] = self.broker_credentials[0], self.broker_credentials[1]
             elif self.connection_mode == 11:
                 # 192.168.137.23 type of address
                 _outer_address = self.outer_broker_address
@@ -190,8 +189,7 @@ class ConnectionManager:
                 # broker.hivemq.com type of address
                 _outer_address = self.outer_broker_address
                 if _outer_address in _PROTECTED_BROKERS:
-                    external_broker['username'] = self.broker_credentials[0]
-                    external_broker['password'] = self.broker_credentials[1]
+                    external_broker['credentials'] = self.broker_credentials[0], self.broker_credentials[1]
             elif self.connection_mode == 11:
                 # localhost or inner broker address
                 _outer_address = _INNER_BROKER_ADDRESS
