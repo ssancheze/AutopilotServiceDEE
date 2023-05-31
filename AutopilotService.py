@@ -19,7 +19,7 @@ _LOCAL_MODE = 0
 _MAX_DRONES = 1
 
 # Telemetry com port: the number next to "COM" that appears when using telemetry for communications.
-_TELEMETRY_COM_PORT = 14
+_TELEMETRY_COM_PORT = 8
 
 
 def arm():
@@ -440,17 +440,6 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
         print("(SWARM MODE) drone number: ", drone_identifier)
     op_mode = operation_mode
 
-    """
-    # The internal broker is always (global or local mode) at localhost:1884
-    internal_broker_address = "localhost"
-    internal_broker_port = 1884
-
-    if connection_mode == 'global':
-        external_broker_address = external_broker
-    else:
-        external_broker_address = 'localhost'
-    """
-
     _args = (connection_mode, _APPLICATION_NAME)
     _kwargs = dict()
     if connection_mode == 'local':
@@ -461,24 +450,21 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     _kwargs['broker_credentials'] = (username, password)
 
     myConnectionManager = ConnectionManager()
-    external_broker_settings, internal_broker_settings = myConnectionManager.setParameters(connection_mode,
-                                                                                           _APPLICATION_NAME, **_kwargs)
+    broker_settings = myConnectionManager.setParameters(connection_mode, _APPLICATION_NAME, **_kwargs)
 
-    print('External broker: ', external_broker_settings[0])
+    print('External broker: ', broker_settings['external'])
 
     external_client = mqtt.Client("Autopilot_external "+drone_id_string, transport="websockets")
     external_client.on_message = on_external_message
 
-    if external_broker_settings[0] in ConnectionManagerClass.getProtectedBrokers():
-        external_client.username_pw_set(*external_broker_settings[2])
-        external_client.connect(*external_broker_settings[:-1])
-    else:
-        external_client.connect(*external_broker_settings)
+    if 'credentials' in broker_settings['external'].keys():
+        external_client.username_pw_set(*broker_settings['external']['credentials'])
+    external_client.connect(host=broker_settings['external']['address'], port=broker_settings['external']['port'])
 
     internal_client = mqtt.Client("Autopilot_internal "+drone_id_string)
     internal_client.on_message = on_internal_message
 
-    internal_client.connect(*internal_broker_settings)
+    internal_client.connect(host=broker_settings['internal']['address'], port=broker_settings['internal']['port'])
 
     print("Waiting....")
     topic_string = "+/autopilotService"+drone_id_string+"/#"
@@ -487,7 +473,8 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     if operation_mode == 'simulation':
         external_client.loop_forever()
     else:
-        external_client.loop_start()
+        # external_client.loop_start() # Camera service active
+        external_client.loop_forever()
     internal_client.loop_start()
 
 
