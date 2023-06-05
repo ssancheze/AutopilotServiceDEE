@@ -419,7 +419,7 @@ def on_external_message(client, userdata, message):
     global external_client
     process_message(message, external_client)
 
-def AutopilotService (connection_mode, operation_mode, external_broker, username, password, droneId=""):
+def AutopilotService (connection_mode, operation_mode, external_broker, username, password, droneId="", hold=False):
     global op_mode
     global external_client
     global internal_client
@@ -470,11 +470,11 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     topic_string = "+/autopilotService"+drone_id_string+"/#"
     external_client.subscribe(topic_string, 2)
     internal_client.subscribe(topic_string)
-    if operation_mode == 'simulation':
+    if hold:
         external_client.loop_forever()
     else:
         # external_client.loop_start() # Camera service active
-        external_client.loop_forever()
+        external_client.loop_start()
     internal_client.loop_start()
 
 
