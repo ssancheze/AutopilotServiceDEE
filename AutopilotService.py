@@ -10,14 +10,6 @@ from pymavlink import mavutil
 import ConnectionManagerClass
 from ConnectionManagerClass import ConnectionManager
 
-# Local mode: set the mode of the local connection:
-# 0 = onboard broker
-# 1 = single broker
-_LOCAL_MODE = 1
-
-# Max drones: the maximum number of drones used if flying in swarm mode
-_MAX_DRONES = 1
-
 # Telemetry com port: the number next to "COM" that appears when using telemetry for communications.
 _TELEMETRY_COM_PORT = 9
 
@@ -303,6 +295,7 @@ def process_message(message, client):
     global op_mode
     global sending_topic
     global state
+    global direct_com_port
 
     splited = message.topic.split("/")
     origin = splited[0]
@@ -316,8 +309,8 @@ def process_message(message, client):
             if op_mode == 'simulation':
                 connection_string = "tcp:127.0.0.1:"+str(5763+drone_identifier*10)
             else:
-                if connection_mode == 'direct':
-                    connection_string = f"com{_TELEMETRY_COM_PORT}"
+                if connection_mode == 'direct' and direct_com_port is not None:
+                    connection_string = f"com{direct_com_port}"
                     _baud_rate = 57600
                 else:
                     connection_string = "/dev/ttyS0"
@@ -410,7 +403,8 @@ def on_external_message(client, userdata, message):
     process_message(message, external_client)
 
 
-def AutopilotService (connection_mode, operation_mode, external_broker, username, password, droneId="", hold=False):
+def AutopilotService(connection_mode, operation_mode, external_broker,
+                      username, password, droneId='', max_drones='', local_mode=None, hold=False):
     global op_mode
     global external_client
     global internal_client
@@ -421,8 +415,8 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     state = 'disconnected'
     drone_identifier = droneId
 
-    print ('Connection mode: ', connection_mode)
-    print ('Operation mode: ', operation_mode)
+    print('Connection mode: ', connection_mode)
+    print('Operation mode: ', operation_mode)
     drone_id_string = ""
     drone_identifier = 0
     if sys.argv[-2] == "multi" and droneId != "":
@@ -434,9 +428,18 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
     _args = (connection_mode, _APPLICATION_NAME)
     _kwargs = dict()
     if connection_mode == 'local':
-        _kwargs['local_mode'] = _LOCAL_MODE
+        _kwargs['local_mode'] = int(local_mode)
+        if local_mode == '0':
+            local_mode_description = 'onboard broker'
+        elif local_mode == '1':
+            local_mode_description = 'single broker'
+        else:
+            local_mode_description = 'ERROR'
+        print(f'Local mode: {local_mode} ({local_mode_description})')
+    elif connection_mode == 'direct':
+        print(f'Direct mode port: COM{direct_com_port}')
     if droneId != "":
-        _kwargs['max_drones'] = _MAX_DRONES
+        _kwargs['max_drones'] = int(max_drones)
     _kwargs['external_broker_address'] = external_broker
     _kwargs['broker_credentials'] = (username, password)
 
@@ -445,7 +448,7 @@ def AutopilotService (connection_mode, operation_mode, external_broker, username
 
     print('External broker: ', broker_settings['external'])
 
-    external_client = mqtt.Client("Autopilot_external "+drone_id_string, transport="websockets")
+    external_client = mqtt.Client("Autopilot_external " + drone_id_string, transport="websockets")
     external_client.on_message = on_external_message
 
     if 'credentials' in broker_settings['external'].keys():
@@ -475,7 +478,7 @@ if __name__ == '__main__':
     """
     SCRIPT PARAMETERS SYNTAX
     connection_mode (local_mode OR direct_com_port) operation_mode 
-    external_broker_address (username pwd) ("multi" drone_id)
+    external_broker_address (username pwd) ("multi" drone_id,max_drones)
     """
 
     connection_mode = sys.argv[1]  # global, local or direct
@@ -497,9 +500,9 @@ if __name__ == '__main__':
         max_drones = sys.argv[-1]
 
     if sys.argv[-2] == "multi":
-        drone_id = sys.argv[-1]
+        drone_id, max_drones = sys.argv[-1].split(',')
     else:
-        drone_id = ''
+        drone_id, max_drones = '', ''
 
     AutopilotService(connection_mode, operation_mode, external_broker_address,
-                     username, password, drone_id, hold=True)
+                     username, password, drone_id, max_drones, local_mode, hold=True)
