@@ -13,13 +13,13 @@ from ConnectionManagerClass import ConnectionManager
 # Local mode: set the mode of the local connection:
 # 0 = onboard broker
 # 1 = single broker
-_LOCAL_MODE = 0
+_LOCAL_MODE = 1
 
 # Max drones: the maximum number of drones used if flying in swarm mode
 _MAX_DRONES = 1
 
 # Telemetry com port: the number next to "COM" that appears when using telemetry for communications.
-_TELEMETRY_COM_PORT = 8
+_TELEMETRY_COM_PORT = 9
 
 
 def arm():
@@ -38,6 +38,7 @@ def arm():
         print(" Waiting for arming...")
         time.sleep(1)
     print(" Armed")
+
 
 def take_off(a_target_altitude, manualControl):
     global state
@@ -95,6 +96,8 @@ These are the different values for the state of the autopilot:
 The autopilot can also be 'disconnected' but this state will never appear in the telemetry_info packet 
 when disconnected the service will not send any packet
 '''
+
+
 def get_telemetry_info ():
     global state
     telemetry_info = {
@@ -132,6 +135,7 @@ def returning():
         time.sleep(1)
     state = 'onHearth'
 
+
 def flying():
     global direction
     global go
@@ -166,7 +170,6 @@ def flying():
             end = True
 
 
-
 def distanceInMeters(aLocation1, aLocation2):
     """
     Returns the ground distance in metres between two LocationGlobal objects.
@@ -179,13 +182,12 @@ def distanceInMeters(aLocation1, aLocation2):
     dlong = aLocation2.lon - aLocation1.lon
     return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
 
+
 def executeFlightPlan(waypoints_json):
     global vehicle
     global internal_client, external_client
     global sending_topic
     global state
-
-
 
     altitude = 6
     origin = sending_topic.split('/')[1]
@@ -197,7 +199,6 @@ def executeFlightPlan(waypoints_json):
     state = 'takingOff'
     take_off(altitude, False)
     state = 'flying'
-
 
     wp = waypoints[0]
     originPoint = dronekit.LocationGlobalRelative(float(wp['lat']), float(wp['lon']), altitude)
@@ -250,8 +251,6 @@ def executeFlightPlan2(waypoints_json):
     global sending_topic
     global state
 
-
-
     altitude = 6
     origin = sending_topic.split('/')[1]
 
@@ -264,8 +263,8 @@ def executeFlightPlan2(waypoints_json):
     cmds = vehicle.commands
     cmds.clear()
 
-    #wp = waypoints[0]
-    #originPoint = dronekit.LocationGlobalRelative(float(wp['lat']), float(wp['lon']), altitude)
+    # wp = waypoints[0]
+    # originPoint = dronekit.LocationGlobalRelative(float(wp['lat']), float(wp['lon']), altitude)
     for wp in waypoints:
         cmds.add(
             Command(0, 0, 0, mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, mavutil.mavlink.MAV_CMD_NAV_WAYPOINT, 0, 0,
@@ -285,8 +284,7 @@ def executeFlightPlan2(waypoints_json):
         time.sleep(0.5)
         if nextwaypoint == len(waypoints):  # Dummy waypoint - as soon as we reach waypoint 4 this is true and we exit.
             print("Last waypoint reached")
-            break;
-
+            break
 
     print('Return to launch')
     state = 'returningHome'
@@ -294,8 +292,6 @@ def executeFlightPlan2(waypoints_json):
     while vehicle.armed:
         time.sleep(1)
     state = 'onHearth'
-
-
 
 
 def process_message(message, client):
@@ -330,11 +326,10 @@ def process_message(message, client):
 
             vehicle.wait_ready(True, timeout=5000)
 
-            print ('Connected to flight controller')
+            print('Connected to flight controller')
             state = 'connected'
 
-            #external_client.publish(sending_topic + "/connected", json.dumps(get_telemetry_info()))
-
+            # external_client.publish(sending_topic + "/connected", json.dumps(get_telemetry_info()))
 
             sending_telemetry_info = True
             y = threading.Thread(target=send_telemetry_info)
@@ -342,20 +337,15 @@ def process_message(message, client):
         else:
             print ('Autopilot already connected')
 
-
-
     if command == "disconnect":
         vehicle.close()
         sending_telemetry_info = False
         state = 'disconnected'
 
-
     if command == "takeOff":
         state = 'takingOff'
         w = threading.Thread(target=take_off, args=[5,True ])
         w.start()
-
-
 
     if command == "returnToLaunch":
         # stop the process of getting positions
@@ -381,7 +371,6 @@ def process_message(message, client):
             time.sleep(1)
         state = 'disarmed'
 
-
     if command == "land":
 
         vehicle.mode = dronekit.VehicleMode("LAND")
@@ -400,6 +389,7 @@ def process_message(message, client):
         w = threading.Thread(target=executeFlightPlan2, args=[waypoints_json, ])
         w.start()
 
+
 def armed_change(self, attr_name, value):
     global vehicle
     global state
@@ -410,14 +400,15 @@ def armed_change(self, attr_name, value):
         state = 'disarmed'
 
 
-
 def on_internal_message(client, userdata, message):
     global internal_client
     process_message(message, internal_client)
 
+
 def on_external_message(client, userdata, message):
     global external_client
     process_message(message, external_client)
+
 
 def AutopilotService (connection_mode, operation_mode, external_broker, username, password, droneId="", hold=False):
     global op_mode
@@ -483,22 +474,32 @@ if __name__ == '__main__':
     _APPLICATION_NAME = __file__.split('\\')[-1][:-3]
     """
     SCRIPT PARAMETERS SYNTAX
-    global/local/direct simulation/production external_broker_address (username pwd) (multi drone_id)
+    connection_mode (local_mode OR direct_com_port) operation_mode 
+    external_broker_address (username pwd) ("multi" drone_id)
     """
 
-    connection_mode = sys.argv[1] # global or local
-    operation_mode = sys.argv[2] # simulation or production
-    username = None
-    password = None
+    connection_mode = sys.argv[1]  # global, local or direct
+    external_broker_address, username, password, local_mode, direct_com_port = [None]*5
     if connection_mode == 'global':
-        external_broker = sys.argv[3]
-        if external_broker == 'classpip.upc.edu':
+        operation_mode = sys.argv[2]  # simulation or production
+        external_broker_address = sys.argv[3]
+        if external_broker_address in ConnectionManagerClass.PROTECTED_BROKERS:
             username = sys.argv[4]
             password = sys.argv[5]
     else:
-        external_broker = None
+        operation_mode = sys.argv[3]
+        if connection_mode == 'local':
+            local_mode = sys.argv[2]
+        elif connection_mode == 'direct':
+            direct_com_port = sys.argv[2]
+
+    if sys.argv[-2] == 'multi':
+        max_drones = sys.argv[-1]
 
     if sys.argv[-2] == "multi":
-        AutopilotService(connection_mode,operation_mode, external_broker, username, password, sys.argv[-1])
+        drone_id = sys.argv[-1]
     else:
-        AutopilotService(connection_mode,operation_mode, external_broker, username, password,)
+        drone_id = ''
+
+    AutopilotService(connection_mode, operation_mode, external_broker_address,
+                     username, password, drone_id, hold=True)
