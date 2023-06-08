@@ -8,11 +8,11 @@ _INNER_BROKER_PORT = 1884
 # Apps of the DEE used by the ConnectionManager to retrieve the broker addresses: all lowercase no spaces
 _DEE_APPLICATIONS = {'dashboard', 'autopilotservice'}
 # Brokers that require username and password
-_PROTECTED_BROKERS = {'classpip.upc.edu'}
+PROTECTED_BROKERS = {'classpip.upc.edu'}
 
 
 def processScriptParameters():
-    # setParameters SYNTAX: operation_mode (local_mode) (external_broker_address) (user pwd)
+    # setParameters SYNTAX: operation_mode (local_mode / direct_com_port) (external_broker_address) (user pwd)
     # parent_application (max_drones)
     script_parameters = sys.argv[1:]
     _index = 0
@@ -35,6 +35,9 @@ def processScriptParameters():
             raise Exception("ERROR: local mode must be either 0 (onboard broker) or 1 (single broker)")
         _index += 1
     else:
+        if _connection_mode == "direct":
+            _direct_com_port = int(script_parameters[_index])
+            _index += 1
         _local_mode = None
     _parent_application = script_parameters[-_default_ending_arguments]
     if _parent_application.lower() not in _DEE_APPLICATIONS:
@@ -42,7 +45,7 @@ def processScriptParameters():
     _external_broker_address = script_parameters[_index: _index_max - _default_ending_arguments]
     _broker_credentials = None
 
-    if _external_broker_address[0] in _PROTECTED_BROKERS:
+    if _external_broker_address[0] in PROTECTED_BROKERS:
         _broker_username = script_parameters[-_default_ending_arguments - 2]
         _broker_pwd = script_parameters[-_default_ending_arguments - 1]
         if _broker_username == _external_broker_address[0] or _broker_pwd == _external_broker_address[0]:
@@ -169,7 +172,7 @@ class ConnectionManager:
             if self.connection_mode == 0:
                 # broker.hivemq.com type of address
                 _outer_address = self.outer_broker_address
-                if _outer_address in _PROTECTED_BROKERS:
+                if _outer_address in PROTECTED_BROKERS:
                     external_broker['credentials'] = self.broker_credentials[0], self.broker_credentials[1]
             elif self.connection_mode == 11:
                 # 192.168.137.23 type of address
@@ -188,7 +191,7 @@ class ConnectionManager:
             if self.connection_mode == 0:
                 # broker.hivemq.com type of address
                 _outer_address = self.outer_broker_address
-                if _outer_address in _PROTECTED_BROKERS:
+                if _outer_address in PROTECTED_BROKERS:
                     external_broker['credentials'] = self.broker_credentials[0], self.broker_credentials[1]
             elif self.connection_mode == 11:
                 # localhost or inner broker address
