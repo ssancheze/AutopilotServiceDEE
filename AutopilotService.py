@@ -10,9 +10,6 @@ from pymavlink import mavutil
 import ConnectionManagerClass
 from ConnectionManagerClass import ConnectionManager
 
-# Telemetry com port: the number next to "COM" that appears when using telemetry for communications.
-_TELEMETRY_COM_PORT = 9
-
 
 def arm():
     """Arms vehicle and fly to aTargetAltitude"""
